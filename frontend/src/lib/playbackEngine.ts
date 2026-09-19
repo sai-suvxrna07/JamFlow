@@ -22,7 +22,9 @@ export class ArrangementPlayer {
     Tone.getTransport().bpm.value = arrangement.tempo;
 
     if (guitarAudioUrl) {
-      this.guitarPlayer = new Tone.Player(guitarAudioUrl).toDestination();
+      this.guitarPlayer = new Tone.Player().toDestination();
+      // Player loads its buffer asynchronously — must await before starting playback.
+      await this.guitarPlayer.load(guitarAudioUrl);
     }
 
     if (arrangement.drums?.enabled) {
