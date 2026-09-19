@@ -40,5 +40,14 @@ Open http://localhost:3000, click Start Recording, play something, then use natu
 ## Deployment
 
 - Frontend deploys to Vercel (root directory `frontend/`).
-- Backend deploys to any Python host that supports FastAPI/ASGI (e.g. Render, Fly.io); point `NEXT_PUBLIC_API_URL` at it.
+- Backend deploys to Render using `backend/render.yaml` (see steps below). Point the frontend's `NEXT_PUBLIC_API_URL` at the deployed backend URL.
+
+### Deploying the backend to Render
+
+1. Push this repo to GitHub (if not already).
+2. In the [Render dashboard](https://dashboard.render.com), click **New > Blueprint**, connect the repo, and Render will pick up `backend/render.yaml` automatically.
+3. When prompted, set the `GEMINI_API_KEY` env var to your real key (it's marked `sync: false` so Render asks for it instead of storing it in the repo).
+4. Deploy. Render gives you a URL like `https://jamflow-backend.onrender.com`.
+5. In your Vercel project settings, set `NEXT_PUBLIC_API_URL` to that Render URL, then redeploy the frontend.
+6. `CORS_ORIGINS` in `render.yaml` is already set to the Vercel domain — update it if your Vercel URL changes, and redeploy the backend.
 
