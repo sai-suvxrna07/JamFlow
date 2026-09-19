@@ -44,6 +44,27 @@ function triggerDrumVoice(voice: DrumVoice, laneName: string, time: number) {
   }
 }
 
+// A default (AI-suggested, non-custom) groove per energy level, so the fallback
+// rhythm actually fits the song instead of one generic pulse for everything.
+// Each step is an 8th note; `true` triggers that lane.
+const DEFAULT_GROOVES: Record<Arrangement["energy"], Record<string, boolean[]>> = {
+  low: {
+    kick: [true, false, false, false, true, false, false, false],
+    hat: [true, false, true, false, true, false, true, false],
+    snare: [false, false, false, false, false, false, false, false],
+  },
+  medium: {
+    kick: [true, false, false, true, false, false, true, false],
+    hat: [true, true, true, true, true, true, true, true],
+    snare: [false, false, true, false, false, false, true, false],
+  },
+  high: {
+    kick: [true, false, true, false, true, false, true, true],
+    hat: [true, true, true, true, true, true, true, true],
+    snare: [false, false, true, false, false, false, true, false],
+  },
+};
+
 // Minimal Tone.js-backed playback engine. This approximates the arrangement
 // with simple synths rather than rendering full production-quality samples.
 export class ArrangementPlayer {
@@ -58,12 +79,27 @@ export class ArrangementPlayer {
   private saxPart: import("tone").Part | null = null;
   private extraParts: import("tone").Part[] = [];
   private gains: Map<string, import("tone").Gain> = new Map();
+  private masterBus: import("tone").Gain | null = null;
+  private reverbSend: import("tone").Reverb | null = null;
+
+  // Shared compressor + limiter glue so stacked instruments don't clip or fight for
+  // headroom, plus a light reverb send so melodic parts sit in the same space.
+  private getMasterBus(Tone: Tone): import("tone").Gain {
+    if (!this.masterBus) {
+      const compressor = new Tone.Compressor({ threshold: -18, ratio: 3 });
+      const limiter = new Tone.Limiter(-1);
+      this.masterBus = new Tone.Gain(1);
+      this.masterBus.chain(compressor, limiter, Tone.getDestination());
+      this.reverbSend = new Tone.Reverb({ decay: 1.8, wet: 0.16 }).connect(this.masterBus);
+    }
+    return this.masterBus;
+  }
 
   // Per-track gain node so a track's volume can be adjusted without recreating its voices.
   private getGain(Tone: Tone, track: string, volumes: TrackVolumes): import("tone").Gain {
     let gain = this.gains.get(track);
     if (!gain) {
-      gain = new Tone.Gain(volumes[track] ?? 1).toDestination();
+      gain = new Tone.Gain(volumes[track] ?? 1).connect(this.getMasterBus(Tone));
       this.gains.set(track, gain);
     }
     return gain;
@@ -73,7 +109,8 @@ export class ArrangementPlayer {
     arrangement: Arrangement,
     sourceAudioUrl: string | null,
     overrides: TrackOverrides = {},
-    volumes: TrackVolumes = {}
+    volumes: TrackVolumes = {},
+    sourceTrimSeconds = 0
   ) {
     const Tone = await import("tone");
     this.toneModule = Tone;
@@ -95,7 +132,7 @@ export class ArrangementPlayer {
       const beatSeconds = 60 / (override?.bpm ?? arrangement.tempo);
       const drumGain = this.getGain(Tone, "drums", volumes);
       const pattern = override?.pattern;
-      const lanes = pattern ? pattern.lanes.map((l) => l.name) : ["kick", "hat"];
+      const lanes = pattern ? pattern.lanes.map((l) => l.name) : ["kick", "snare", "hat"];
       for (const name of lanes) {
         this.drumVoices.set(name, createDrumVoice(Tone, name, intensity).connect(drumGain));
       }
@@ -114,11 +151,15 @@ export class ArrangementPlayer {
           step += 1;
         }, beatSeconds * beatsPerStep).start(0);
       } else {
+        const groove = DEFAULT_GROOVES[arrangement.energy] ?? DEFAULT_GROOVES.medium;
         let step = 0;
         this.drumLoop = new Tone.Loop((time) => {
           if (isWithinRange(Tone.getTransport().seconds, secondsPerSongBeat, override)) {
-            if (step % 2 === 0) triggerDrumVoice(this.drumVoices.get("kick")!, "kick", time);
-            triggerDrumVoice(this.drumVoices.get("hat")!, "hat", time);
+            for (const [name, steps] of Object.entries(groove)) {
+              if (!steps[step % steps.length]) continue;
+              const voice = this.drumVoices.get(name);
+              if (voice) triggerDrumVoice(voice, name, time);
+            }
           }
           step += 1;
         }, beatSeconds * 0.5).start(0);
@@ -160,21 +201,26 @@ export class ArrangementPlayer {
       this.saxSynth = new Tone.Synth({
         oscillator: { type: "sawtooth" },
         volume: -6,
+        envelope: { attack: 0.02, decay: 0.1, sustain: 0.6, release: 0.3 },
       }).connect(this.getGain(Tone, "saxophone", volumes));
+      if (this.reverbSend) this.saxSynth.connect(this.reverbSend);
       this.saxPart = createNotePart(Tone, this.saxSynth, arrangement.saxophone.notes).start(0);
     }
 
     for (const extra of arrangement.extra_instruments) {
       if (!extra.notes.length) continue;
       const trackKey = `extra:${extra.name}`;
-      const synth = new Tone.Synth({ oscillator: { type: "triangle" }, volume: -8 }).connect(
-        this.getGain(Tone, trackKey, volumes)
-      );
+      const synth = new Tone.Synth({
+        oscillator: { type: "triangle" },
+        volume: -8,
+        envelope: { attack: 0.02, decay: 0.1, sustain: 0.6, release: 0.3 },
+      }).connect(this.getGain(Tone, trackKey, volumes));
+      if (this.reverbSend) synth.connect(this.reverbSend);
       this.extraSynths.set(extra.name, synth);
       this.extraParts.push(createNotePart(Tone, synth, extra.notes).start(0));
     }
 
-    this.sourcePlayer?.start(0);
+    this.sourcePlayer?.start(0, sourceTrimSeconds);
     Tone.getTransport().start();
   }
 
@@ -195,6 +241,8 @@ export class ArrangementPlayer {
     this.drumVoices.forEach((voice) => voice.dispose());
     this.extraSynths.forEach((synth) => synth.dispose());
     this.gains.forEach((gain) => gain.dispose());
+    this.reverbSend?.dispose();
+    this.masterBus?.dispose();
     this.drumVoices.clear();
     this.extraSynths.clear();
     this.gains.clear();
@@ -205,6 +253,8 @@ export class ArrangementPlayer {
     this.drumLoop = null;
     this.bassLoop = null;
     this.saxPart = null;
+    this.masterBus = null;
+    this.reverbSend = null;
   }
 }
 

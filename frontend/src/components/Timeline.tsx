@@ -19,6 +19,8 @@ interface TimelineProps {
   onSongLengthChange: (bars: number) => void;
   volumes: TrackVolumes;
   onVolumeChange: (track: string, value: number) => void;
+  sourceTrimSeconds: number;
+  onSourceTrimChange: (seconds: number) => void;
 }
 
 const BEATS_PER_BAR = 4;
@@ -54,6 +56,8 @@ export function Timeline({
   onSongLengthChange,
   volumes,
   onVolumeChange,
+  sourceTrimSeconds,
+  onSourceTrimChange,
 }: TimelineProps) {
   const [drag, setDrag] = useState<DragState | null>(null);
   const [editingBeat, setEditingBeat] = useState<PatternTrackName | null>(null);
@@ -170,6 +174,9 @@ export function Timeline({
       <p className="mt-1 text-sm text-muted">
         Drag a track&apos;s edges to set when it plays, mute it, or set its own BPM.
         Use &quot;Beat&quot; to draw your own rhythm instead of the AI-suggested groove.
+        If the added instruments feel out of sync with your recording, nudge{" "}
+        <span className="font-medium text-foreground">Sync offset</span> on the source
+        track — leading silence is trimmed automatically, but you can fine-tune it.
       </p>
 
       <div className="mt-4">
@@ -209,6 +216,22 @@ export function Timeline({
           </div>
           <div>
             <VolumeControl trackKey="source" />
+            <label className="mt-1 flex items-center gap-1 text-xs text-muted">
+              Sync offset
+              <input
+                type="number"
+                step={0.05}
+                min={-1}
+                max={2}
+                value={Math.round(sourceTrimSeconds * 100) / 100}
+                onChange={(e) => {
+                  const value = Number(e.target.value);
+                  if (!Number.isNaN(value)) onSourceTrimChange(value);
+                }}
+                className="w-14 border-b border-line bg-transparent text-foreground outline-none focus:border-accent"
+              />
+              s
+            </label>
           </div>
         </div>
 

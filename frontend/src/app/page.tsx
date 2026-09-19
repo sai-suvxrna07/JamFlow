@@ -8,6 +8,7 @@ import { Timeline } from "@/components/Timeline";
 import { CommandBar } from "@/components/CommandBar";
 import { DebugPanel, type DebugEntry } from "@/components/DebugPanel";
 import { analyzeRecording, sendCommand } from "@/lib/api";
+import { detectLeadingSilence } from "@/lib/audioTrim";
 import { ArrangementPlayer } from "@/lib/playbackEngine";
 import type { Arrangement, TrackOverrides, TrackVolumes } from "@/lib/types";
 
@@ -19,6 +20,7 @@ export default function Home() {
   const [overrides, setOverrides] = useState<TrackOverrides>({});
   const [songLengthBars, setSongLengthBars] = useState(8);
   const [volumes, setVolumes] = useState<TrackVolumes>({});
+  const [sourceTrimSeconds, setSourceTrimSeconds] = useState(0);
   const [status, setStatus] = useState<"idle" | "analyzing" | "updating">(
     "idle"
   );
@@ -35,6 +37,8 @@ export default function Home() {
     setError(null);
     setStatus("analyzing");
     setAudioUrl(URL.createObjectURL(blob));
+    setSourceTrimSeconds(0);
+    detectLeadingSilence(blob).then(setSourceTrimSeconds);
     try {
       const { arrangement: result } = await analyzeRecording(blob);
       setArrangement(result);
@@ -81,7 +85,7 @@ export default function Home() {
   async function handlePlay() {
     if (!arrangement) return;
     if (!playerRef.current) playerRef.current = new ArrangementPlayer();
-    await playerRef.current.play(arrangement, audioUrl, overrides, volumes);
+    await playerRef.current.play(arrangement, audioUrl, overrides, volumes, sourceTrimSeconds);
   }
 
   function handleStop() {
@@ -114,6 +118,7 @@ export default function Home() {
     setError(null);
     setSongLengthBars(8);
     setVolumes({});
+    setSourceTrimSeconds(0);
   }
 
   return (
@@ -182,6 +187,8 @@ export default function Home() {
                 onSongLengthChange={setSongLengthBars}
                 volumes={volumes}
                 onVolumeChange={handleVolumeChange}
+                sourceTrimSeconds={sourceTrimSeconds}
+                onSourceTrimChange={setSourceTrimSeconds}
               />
             </div>
 
