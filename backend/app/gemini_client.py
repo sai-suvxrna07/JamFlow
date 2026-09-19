@@ -10,8 +10,9 @@ from google.genai import types
 from app.schemas import Arrangement
 
 MODEL = "gemini-3.6-flash"
-MAX_RETRIES = 3
+MAX_RETRIES = 5
 RETRY_BACKOFF_SECONDS = 2
+RETRY_BACKOFF_MAX_SECONDS = 15
 
 _client: genai.Client | None = None
 
@@ -68,7 +69,8 @@ def _generate_with_retry(**kwargs) -> types.GenerateContentResponse:
         except genai_errors.ServerError:
             if attempt == MAX_RETRIES - 1:
                 raise
-            time.sleep(RETRY_BACKOFF_SECONDS * (attempt + 1))
+            backoff = min(RETRY_BACKOFF_SECONDS * (2**attempt), RETRY_BACKOFF_MAX_SECONDS)
+            time.sleep(backoff)
 
 
 def analyze_recording(audio_bytes: bytes, mime_type: str) -> Arrangement:
