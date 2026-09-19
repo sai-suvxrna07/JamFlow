@@ -17,6 +17,7 @@ export default function Home() {
   const [arrangement, setArrangement] = useState<Arrangement | null>(null);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [overrides, setOverrides] = useState<TrackOverrides>({});
+  const [songLengthBars, setSongLengthBars] = useState(8);
   const [status, setStatus] = useState<"idle" | "analyzing" | "updating">(
     "idle"
   );
@@ -58,7 +59,8 @@ export default function Home() {
     try {
       const { arrangement: result } = await sendCommand(
         instruction,
-        arrangement
+        arrangement,
+        songLengthBars
       );
       setArrangement(result);
       logDebug({
@@ -104,6 +106,7 @@ export default function Home() {
     setOverrides({});
     setHistory([]);
     setError(null);
+    setSongLengthBars(8);
   }
 
   return (
@@ -168,6 +171,8 @@ export default function Home() {
                 overrides={overrides}
                 onChange={setOverrides}
                 onToggleTrack={handleToggleTrack}
+                songLengthBars={songLengthBars}
+                onSongLengthChange={setSongLengthBars}
               />
             </div>
 

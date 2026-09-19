@@ -1,18 +1,56 @@
 import type { Arrangement, NoteEvent, TrackOverride, TrackOverrides } from "./types";
 
+type Tone = typeof import("tone");
+type DrumVoice = import("tone").MembraneSynth | import("tone").NoiseSynth;
+
+// Membrane (pitched) drum sounds vs. noise-based percussion, keyed by lane name.
+const MEMBRANE_LANES: Record<string, string> = {
+  kick: "C1",
+  tom: "G1",
+  floor: "E1",
+};
+const NOISE_DECAY: Record<string, number> = {
+  snare: 0.15,
+  clap: 0.08,
+  hat: 0.05,
+  ride: 0.3,
+  crash: 0.6,
+};
+
+function createDrumVoice(Tone: Tone, laneName: string, intensity: number): DrumVoice {
+  const membranePitch = MEMBRANE_LANES[laneName];
+  if (membranePitch) {
+    return new Tone.MembraneSynth({ volume: -10 + intensity * 8 }).toDestination();
+  }
+  const decay = NOISE_DECAY[laneName] ?? 0.05;
+  return new Tone.NoiseSynth({
+    volume: -16 + intensity * 10,
+    envelope: { attack: 0.001, decay, sustain: 0 },
+  }).toDestination();
+}
+
+function triggerDrumVoice(voice: DrumVoice, laneName: string, time: number) {
+  const membranePitch = MEMBRANE_LANES[laneName];
+  if (membranePitch && "triggerAttackRelease" in voice) {
+    (voice as import("tone").MembraneSynth).triggerAttackRelease(membranePitch, "8n", time);
+  } else {
+    (voice as import("tone").NoiseSynth).triggerAttackRelease("16n", time);
+  }
+}
+
 // Minimal Tone.js-backed playback engine. This approximates the arrangement
 // with simple synths rather than rendering full production-quality samples.
 export class ArrangementPlayer {
-  private toneModule: typeof import("tone") | null = null;
+  private toneModule: Tone | null = null;
   private sourcePlayer: import("tone").Player | null = null;
-  private drumKick: import("tone").MembraneSynth | null = null;
-  private drumSnare: import("tone").NoiseSynth | null = null;
-  private drumHat: import("tone").NoiseSynth | null = null;
+  private drumVoices: Map<string, DrumVoice> = new Map();
   private bassSynth: import("tone").MonoSynth | null = null;
   private saxSynth: import("tone").Synth | null = null;
+  private extraSynths: Map<string, import("tone").Synth> = new Map();
   private drumLoop: import("tone").Loop | null = null;
   private bassLoop: import("tone").Loop | null = null;
   private saxPart: import("tone").Part | null = null;
+  private extraParts: import("tone").Part[] = [];
 
   async play(
     arrangement: Arrangement,
@@ -37,30 +75,21 @@ export class ArrangementPlayer {
       const override = overrides.drums;
       const intensity = arrangement.drums.intensity;
       const beatSeconds = 60 / (override?.bpm ?? arrangement.tempo);
-      this.drumKick = new Tone.MembraneSynth({
-        volume: -10 + intensity * 8,
-      }).toDestination();
-      this.drumSnare = new Tone.NoiseSynth({
-        volume: -14 + intensity * 8,
-        envelope: { attack: 0.001, decay: 0.15, sustain: 0 },
-      }).toDestination();
-      this.drumHat = new Tone.NoiseSynth({
-        volume: -18 + intensity * 12,
-        envelope: { attack: 0.001, decay: 0.05, sustain: 0 },
-      }).toDestination();
-
       const pattern = override?.pattern;
+      const lanes = pattern ? pattern.lanes.map((l) => l.name) : ["kick", "hat"];
+      for (const name of lanes) {
+        this.drumVoices.set(name, createDrumVoice(Tone, name, intensity));
+      }
+
       if (pattern) {
-        const stepsPerBar = pattern.stepsPerBar;
-        const beatsPerStep = 4 / stepsPerBar;
+        const beatsPerStep = 4 / pattern.stepsPerBar;
         let step = 0;
         this.drumLoop = new Tone.Loop((time) => {
           if (isWithinRange(Tone.getTransport().seconds, secondsPerSongBeat, override)) {
             for (const lane of pattern.lanes) {
               if (!lane.steps[step % lane.steps.length]) continue;
-              if (lane.name === "kick") this.drumKick?.triggerAttackRelease("C1", "8n", time);
-              else if (lane.name === "snare") this.drumSnare?.triggerAttackRelease("16n", time);
-              else if (lane.name === "hat") this.drumHat?.triggerAttackRelease("16n", time);
+              const voice = this.drumVoices.get(lane.name);
+              if (voice) triggerDrumVoice(voice, lane.name, time);
             }
           }
           step += 1;
@@ -69,8 +98,8 @@ export class ArrangementPlayer {
         let step = 0;
         this.drumLoop = new Tone.Loop((time) => {
           if (isWithinRange(Tone.getTransport().seconds, secondsPerSongBeat, override)) {
-            if (step % 2 === 0) this.drumKick?.triggerAttackRelease("C1", "8n", time);
-            this.drumHat?.triggerAttackRelease("16n", time);
+            if (step % 2 === 0) triggerDrumVoice(this.drumVoices.get("kick")!, "kick", time);
+            triggerDrumVoice(this.drumVoices.get("hat")!, "hat", time);
           }
           step += 1;
         }, beatSeconds * 0.5).start(0);
@@ -113,22 +142,14 @@ export class ArrangementPlayer {
         oscillator: { type: "sawtooth" },
         volume: -6,
       }).toDestination();
+      this.saxPart = createNotePart(Tone, this.saxSynth, arrangement.saxophone.notes).start(0);
+    }
 
-      const events = arrangement.saxophone.notes.map((note: NoteEvent) => ({
-        time: `0:${note.start}`,
-        note: note.pitch,
-        duration: note.duration,
-        velocity: note.velocity,
-      }));
-
-      this.saxPart = new Tone.Part((time, value) => {
-        this.saxSynth?.triggerAttackRelease(
-          value.note,
-          `${value.duration}n`,
-          time,
-          value.velocity
-        );
-      }, events).start(0);
+    for (const extra of arrangement.extra_instruments) {
+      if (!extra.notes.length) continue;
+      const synth = new Tone.Synth({ oscillator: { type: "triangle" }, volume: -8 }).toDestination();
+      this.extraSynths.set(extra.name, synth);
+      this.extraParts.push(createNotePart(Tone, synth, extra.notes).start(0));
     }
 
     this.sourcePlayer?.start(0);
@@ -139,25 +160,38 @@ export class ArrangementPlayer {
     const Tone = this.toneModule;
     Tone?.getTransport().stop();
     Tone?.getTransport().cancel();
-    [this.drumLoop, this.bassLoop, this.saxPart].forEach((node) => node?.dispose());
-    [
-      this.sourcePlayer,
-      this.drumKick,
-      this.drumSnare,
-      this.drumHat,
-      this.bassSynth,
-      this.saxSynth,
-    ].forEach((node) => node?.dispose());
+    [this.drumLoop, this.bassLoop, this.saxPart, ...this.extraParts].forEach((node) =>
+      node?.dispose()
+    );
+    [this.sourcePlayer, this.bassSynth, this.saxSynth].forEach((node) => node?.dispose());
+    this.drumVoices.forEach((voice) => voice.dispose());
+    this.extraSynths.forEach((synth) => synth.dispose());
+    this.drumVoices.clear();
+    this.extraSynths.clear();
+    this.extraParts = [];
     this.sourcePlayer = null;
-    this.drumKick = null;
-    this.drumSnare = null;
-    this.drumHat = null;
     this.bassSynth = null;
     this.saxSynth = null;
     this.drumLoop = null;
     this.bassLoop = null;
     this.saxPart = null;
   }
+}
+
+function createNotePart(
+  Tone: Tone,
+  synth: import("tone").Synth,
+  notes: NoteEvent[]
+): import("tone").Part {
+  const events = notes.map((note: NoteEvent) => ({
+    time: `0:${note.start}`,
+    note: note.pitch,
+    duration: note.duration,
+    velocity: note.velocity,
+  }));
+  return new Tone.Part((time, value) => {
+    synth.triggerAttackRelease(value.note, `${value.duration}n`, time, value.velocity);
+  }, events);
 }
 
 function isWithinRange(

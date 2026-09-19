@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import type { PatternTrackName, StepLane, StepPattern } from "@/lib/types";
 
 interface BeatMakerProps {
@@ -13,6 +14,8 @@ const DEFAULT_LANES: Record<PatternTrackName, StepLane[]> = {
     { name: "kick", steps: Array(16).fill(false) },
     { name: "snare", steps: Array(16).fill(false) },
     { name: "hat", steps: Array(16).fill(false) },
+    { name: "tom", steps: Array(16).fill(false) },
+    { name: "clap", steps: Array(16).fill(false) },
   ],
   bass: [{ name: "note", steps: Array(8).fill(false) }],
 };
@@ -25,6 +28,8 @@ export function defaultPattern(trackName: PatternTrackName): StepPattern {
 }
 
 export function BeatMaker({ trackName, pattern, onChange }: BeatMakerProps) {
+  const [newLaneName, setNewLaneName] = useState("");
+
   function toggleStep(laneIndex: number, stepIndex: number) {
     const lanes = pattern.lanes.map((lane, i) => {
       if (i !== laneIndex) return lane;
@@ -39,11 +44,26 @@ export function BeatMaker({ trackName, pattern, onChange }: BeatMakerProps) {
     onChange(defaultPattern(trackName));
   }
 
+  function addLane(e: React.FormEvent) {
+    e.preventDefault();
+    const name = newLaneName.trim().toLowerCase();
+    if (!name || pattern.lanes.some((lane) => lane.name === name)) return;
+    onChange({
+      ...pattern,
+      lanes: [...pattern.lanes, { name, steps: Array(pattern.stepsPerBar).fill(false) }],
+    });
+    setNewLaneName("");
+  }
+
+  function removeLane(laneIndex: number) {
+    onChange({ ...pattern, lanes: pattern.lanes.filter((_, i) => i !== laneIndex) });
+  }
+
   return (
     <div className="mt-3 rounded border border-line p-3">
       <div className="flex items-center justify-between">
         <p className="text-xs uppercase tracking-wide text-muted">
-          {trackName} beat
+          {trackName} beat — any drum or percussion sound
         </p>
         <button
           type="button"
@@ -56,7 +76,19 @@ export function BeatMaker({ trackName, pattern, onChange }: BeatMakerProps) {
       <div className="mt-2 space-y-1.5">
         {pattern.lanes.map((lane, laneIndex) => (
           <div key={lane.name} className="flex items-center gap-2">
-            <span className="w-12 shrink-0 text-xs text-muted">{lane.name}</span>
+            <span className="flex w-16 shrink-0 items-center gap-1 text-xs text-muted">
+              {lane.name}
+              {trackName === "drums" && (
+                <button
+                  type="button"
+                  onClick={() => removeLane(laneIndex)}
+                  aria-label={`Remove ${lane.name} lane`}
+                  className="text-muted hover:text-accent"
+                >
+                  ×
+                </button>
+              )}
+            </span>
             <div className="flex gap-1">
               {lane.steps.map((on, stepIndex) => (
                 <button
@@ -73,6 +105,23 @@ export function BeatMaker({ trackName, pattern, onChange }: BeatMakerProps) {
           </div>
         ))}
       </div>
+      {trackName === "drums" && (
+        <form onSubmit={addLane} className="mt-3 flex items-center gap-2">
+          <input
+            value={newLaneName}
+            onChange={(e) => setNewLaneName(e.target.value)}
+            placeholder="Add a sound (ride, crash, perc…)"
+            className="w-48 border-b border-line bg-transparent text-xs outline-none placeholder:text-muted focus:border-accent"
+          />
+          <button
+            type="submit"
+            className="text-xs font-semibold text-accent disabled:opacity-40"
+            disabled={!newLaneName.trim()}
+          >
+            + Add
+          </button>
+        </form>
+      )}
     </div>
   );
 }

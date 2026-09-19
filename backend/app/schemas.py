@@ -36,6 +36,14 @@ class MelodicTrack(BaseModel):
     notes: list[NoteEvent] = Field(default_factory=list)
 
 
+class ExtraInstrument(BaseModel):
+    """An additional instrument Gemini decides fits the song (piano, strings, synth, etc.)."""
+
+    name: str = Field(description="Instrument name, e.g. 'piano', 'strings', 'synth pad'")
+    role: str = Field(description="How it fits the arrangement, e.g. 'pad', 'lead', 'accent'")
+    notes: list[NoteEvent] = Field(default_factory=list)
+
+
 class Arrangement(BaseModel):
     tempo: int = Field(description="Tempo in BPM")
     key: str = Field(description="Key / tonal center, e.g. 'A minor'")
@@ -49,6 +57,10 @@ class Arrangement(BaseModel):
     drums: Optional[RhythmSectionTrack] = None
     bass: Optional[RhythmSectionTrack] = None
     saxophone: Optional[MelodicTrack] = None
+    extra_instruments: list[ExtraInstrument] = Field(
+        default_factory=list,
+        description="Additional instruments beyond drums/bass/saxophone that suit the song's style",
+    )
     notes: Optional[str] = Field(
         default=None,
         description="Short human-readable summary of the latest analysis or change",
@@ -62,6 +74,10 @@ class AnalyzeResponse(BaseModel):
 class CommandRequest(BaseModel):
     instruction: str
     arrangement: Arrangement
+    song_length_bars: Optional[int] = Field(
+        default=None,
+        description="Desired total song length in bars, if the musician has set one",
+    )
 
 
 class CommandResponse(BaseModel):

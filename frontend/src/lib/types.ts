@@ -21,6 +21,12 @@ export interface MelodicTrack {
   notes: NoteEvent[];
 }
 
+export interface ExtraInstrument {
+  name: string; // e.g. "piano", "strings", "synth pad"
+  role: string; // e.g. "pad", "lead", "accent"
+  notes: NoteEvent[];
+}
+
 export interface Arrangement {
   tempo: number;
   key: string;
@@ -31,6 +37,7 @@ export interface Arrangement {
   drums?: RhythmSectionTrack;
   bass?: RhythmSectionTrack;
   saxophone?: MelodicTrack;
+  extra_instruments: ExtraInstrument[];
   notes?: string; // short human-readable summary of the latest change
 }
 
@@ -41,6 +48,7 @@ export interface AnalyzeResponse {
 export interface CommandRequest {
   instruction: string;
   arrangement: Arrangement;
+  song_length_bars?: number | null;
 }
 
 // --- Timeline / beat-maker state ---

@@ -36,12 +36,17 @@ export async function analyzeRecording(
 
 export async function sendCommand(
   instruction: string,
-  arrangement: Arrangement
+  arrangement: Arrangement,
+  songLengthBars: number | null = null
 ): Promise<CommandResponse> {
   const res = await fetch(`${API_URL}/api/command`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ instruction, arrangement }),
+    body: JSON.stringify({
+      instruction,
+      arrangement,
+      song_length_bars: songLengthBars,
+    }),
   });
 
   if (!res.ok) {

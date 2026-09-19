@@ -10,7 +10,9 @@ router = APIRouter()
 @router.post("/command", response_model=CommandResponse)
 async def command(request: CommandRequest) -> CommandResponse:
     try:
-        arrangement = interpret_command(request.instruction, request.arrangement)
+        arrangement = interpret_command(
+            request.instruction, request.arrangement, request.song_length_bars
+        )
     except genai_errors.ClientError as exc:
         if exc.code == 429:
             raise HTTPException(
