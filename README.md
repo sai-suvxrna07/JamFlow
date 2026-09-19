@@ -1,2 +1,10 @@
 # JamFlow
-An music production website that lets musicians improvise with an AI bandmate in real time.  Anyone can start playing—whether they are practicing a scale, playing a riff, or improvising. Unlike manually programming drums, bass, chords, and other instruments, Gemini interprets the musical context, rhythm, tempo, and energy.
+We’re building an interactive music production website that lets musicians improvise with an AI bandmate in real time.
+
+A musician can simply pick up their guitar and start playing—whether they are practicing a scale, playing a riff, or improvising. Instead of requiring them to manually program drums, bass, chords, and other instruments, the system listens to their performance and uses Gemini to interpret the musical context, including the player's rhythm, tempo, energy, and direction. It then adapts the accompanying instruments to match their flow.
+
+The musician can also use natural voice commands while playing, such as “add bass,” “make the drums more energetic,” “drop the drums,” or “add strings.” Gemini interprets these commands in the context of the current performance and translates them into changes to the arrangement.
+
+The goal is to make music creation feel less like operating a DAW and more like playing with a real band. Instead of stopping to program every part, musicians can focus on playing and let the AI respond to them.
+
+Gemini is central to the interaction loop: it interprets both the musician’s audio and natural-language instructions, determines how the virtual ensemble should respond, and drives changes in the musical arrangement.
