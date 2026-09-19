@@ -27,6 +27,7 @@ export interface Arrangement {
   time_signature: string;
   energy: Energy;
   style: string;
+  instrument: string; // the instrument heard in the original recording
   drums?: RhythmSectionTrack;
   bass?: RhythmSectionTrack;
   saxophone?: MelodicTrack;
@@ -61,6 +62,7 @@ export interface StepPattern {
 export interface TrackOverride {
   start: number; // beats from arrangement start
   end: number | null; // beats from arrangement start; null = play through
+  bpm: number | null; // independent tempo for this track; null = follow the song tempo
   pattern?: StepPattern | null;
 }
 

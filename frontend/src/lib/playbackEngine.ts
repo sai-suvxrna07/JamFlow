@@ -1,10 +1,10 @@
-import type { Arrangement, NoteEvent, TrackOverrides } from "./types";
+import type { Arrangement, NoteEvent, TrackOverride, TrackOverrides } from "./types";
 
 // Minimal Tone.js-backed playback engine. This approximates the arrangement
 // with simple synths rather than rendering full production-quality samples.
 export class ArrangementPlayer {
   private toneModule: typeof import("tone") | null = null;
-  private guitarPlayer: import("tone").Player | null = null;
+  private sourcePlayer: import("tone").Player | null = null;
   private drumKick: import("tone").MembraneSynth | null = null;
   private drumSnare: import("tone").NoiseSynth | null = null;
   private drumHat: import("tone").NoiseSynth | null = null;
@@ -16,7 +16,7 @@ export class ArrangementPlayer {
 
   async play(
     arrangement: Arrangement,
-    guitarAudioUrl: string | null,
+    sourceAudioUrl: string | null,
     overrides: TrackOverrides = {}
   ) {
     const Tone = await import("tone");
@@ -25,16 +25,18 @@ export class ArrangementPlayer {
     this.stop();
 
     Tone.getTransport().bpm.value = arrangement.tempo;
+    const secondsPerSongBeat = 60 / arrangement.tempo;
 
-    if (guitarAudioUrl) {
-      this.guitarPlayer = new Tone.Player().toDestination();
+    if (sourceAudioUrl) {
+      this.sourcePlayer = new Tone.Player().toDestination();
       // Player loads its buffer asynchronously — must await before starting playback.
-      await this.guitarPlayer.load(guitarAudioUrl);
+      await this.sourcePlayer.load(sourceAudioUrl);
     }
 
     if (arrangement.drums?.enabled) {
       const override = overrides.drums;
       const intensity = arrangement.drums.intensity;
+      const beatSeconds = 60 / (override?.bpm ?? arrangement.tempo);
       this.drumKick = new Tone.MembraneSynth({
         volume: -10 + intensity * 8,
       }).toDestination();
@@ -53,8 +55,7 @@ export class ArrangementPlayer {
         const beatsPerStep = 4 / stepsPerBar;
         let step = 0;
         this.drumLoop = new Tone.Loop((time) => {
-          const currentBeat = step * beatsPerStep;
-          if (isWithinRange(currentBeat, override)) {
+          if (isWithinRange(Tone.getTransport().seconds, secondsPerSongBeat, override)) {
             for (const lane of pattern.lanes) {
               if (!lane.steps[step % lane.steps.length]) continue;
               if (lane.name === "kick") this.drumKick?.triggerAttackRelease("C1", "8n", time);
@@ -63,22 +64,22 @@ export class ArrangementPlayer {
             }
           }
           step += 1;
-        }, `${stepsPerBar}n`).start(0);
+        }, beatSeconds * beatsPerStep).start(0);
       } else {
         let step = 0;
         this.drumLoop = new Tone.Loop((time) => {
-          const currentBeat = step * 0.5;
-          if (isWithinRange(currentBeat, override)) {
+          if (isWithinRange(Tone.getTransport().seconds, secondsPerSongBeat, override)) {
             if (step % 2 === 0) this.drumKick?.triggerAttackRelease("C1", "8n", time);
             this.drumHat?.triggerAttackRelease("16n", time);
           }
           step += 1;
-        }, "8n").start(0);
+        }, beatSeconds * 0.5).start(0);
       }
     }
 
     if (arrangement.bass?.enabled) {
       const override = overrides.bass;
+      const beatSeconds = 60 / (override?.bpm ?? arrangement.tempo);
       this.bassSynth = new Tone.MonoSynth({
         volume: -8,
         oscillator: { type: "sine" },
@@ -92,21 +93,18 @@ export class ArrangementPlayer {
         const lane = pattern.lanes[0];
         let step = 0;
         this.bassLoop = new Tone.Loop((time) => {
-          const currentBeat = step * beatsPerStep;
-          if (isWithinRange(currentBeat, override) && lane?.steps[step % lane.steps.length]) {
+          const inRange = isWithinRange(Tone.getTransport().seconds, secondsPerSongBeat, override);
+          if (inRange && lane?.steps[step % lane.steps.length]) {
             this.bassSynth?.triggerAttackRelease(rootNote, "8n", time);
           }
           step += 1;
-        }, `${stepsPerBar}n`).start(0);
+        }, beatSeconds * beatsPerStep).start(0);
       } else {
-        let bar = 0;
         this.bassLoop = new Tone.Loop((time) => {
-          const currentBeat = bar * 4;
-          if (isWithinRange(currentBeat, override)) {
+          if (isWithinRange(Tone.getTransport().seconds, secondsPerSongBeat, override)) {
             this.bassSynth?.triggerAttackRelease(rootNote, "2n", time);
           }
-          bar += 1;
-        }, "1m").start(0);
+        }, beatSeconds * 4).start(0);
       }
     }
 
@@ -133,7 +131,7 @@ export class ArrangementPlayer {
       }, events).start(0);
     }
 
-    this.guitarPlayer?.start(0);
+    this.sourcePlayer?.start(0);
     Tone.getTransport().start();
   }
 
@@ -143,14 +141,14 @@ export class ArrangementPlayer {
     Tone?.getTransport().cancel();
     [this.drumLoop, this.bassLoop, this.saxPart].forEach((node) => node?.dispose());
     [
-      this.guitarPlayer,
+      this.sourcePlayer,
       this.drumKick,
       this.drumSnare,
       this.drumHat,
       this.bassSynth,
       this.saxSynth,
     ].forEach((node) => node?.dispose());
-    this.guitarPlayer = null;
+    this.sourcePlayer = null;
     this.drumKick = null;
     this.drumSnare = null;
     this.drumHat = null;
@@ -163,12 +161,13 @@ export class ArrangementPlayer {
 }
 
 function isWithinRange(
-  beat: number,
-  override: { start: number; end: number | null } | undefined
+  transportSeconds: number,
+  secondsPerSongBeat: number,
+  override: TrackOverride | undefined
 ): boolean {
   if (!override) return true;
-  if (beat < override.start) return false;
-  if (override.end !== null && beat >= override.end) return false;
+  if (transportSeconds < override.start * secondsPerSongBeat) return false;
+  if (override.end !== null && transportSeconds >= override.end * secondsPerSongBeat) return false;
   return true;
 }
 

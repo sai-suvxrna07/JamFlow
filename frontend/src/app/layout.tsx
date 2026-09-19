@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "JamFlow — AI bandmate for your recordings",
   description:
-    "Record a riff, tell JamFlow what to add, and hear the arrangement grow with you.",
+    "Record any instrument, tell JamFlow what to add, and hear the arrangement grow with you.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

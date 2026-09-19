@@ -31,12 +31,14 @@ def get_client() -> genai.Client:
 
 
 ANALYZE_PROMPT = """You are the ears of an AI bandmate and producer. Listen to this \
-recording of a musician playing an instrument and describe it as structured musical \
-data: approximate tempo (BPM), likely key/tonal center, time signature, overall \
-energy, and musical style/feel. Also decide a sensible starting arrangement: leave \
-drums, bass, and saxophone disabled (the musician will ask for them explicitly), but \
-set style/role fields to sensible defaults so they're ready to be turned on later. \
-Write a one-sentence, plain-language summary of what you heard in the `notes` field."""
+recording of a musician playing an instrument (any instrument or voice — guitar, \
+piano, vocals, violin, drums, etc.) and describe it as structured musical data: \
+identify the instrument being played, approximate tempo (BPM), likely key/tonal \
+center, time signature, overall energy, and musical style/feel. Also decide a \
+sensible starting arrangement: leave drums, bass, and saxophone disabled (the \
+musician will ask for them explicitly), but set style/role fields to sensible \
+defaults so they're ready to be turned on later. Write a one-sentence, \
+plain-language summary of what you heard in the `notes` field."""
 
 COMMAND_PROMPT_TEMPLATE = """You are the producer half of an AI bandmate. The \
 musician recorded a part, and Gemini already analyzed it into the arrangement state \

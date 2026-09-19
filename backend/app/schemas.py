@@ -42,6 +42,10 @@ class Arrangement(BaseModel):
     time_signature: str = Field(default="4/4")
     energy: Energy
     style: str = Field(description="Overall musical style/feel")
+    instrument: str = Field(
+        default="instrument",
+        description="The instrument heard in the original recording, e.g. 'electric guitar', 'piano', 'vocals'",
+    )
     drums: Optional[RhythmSectionTrack] = None
     bass: Optional[RhythmSectionTrack] = None
     saxophone: Optional[MelodicTrack] = None

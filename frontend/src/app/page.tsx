@@ -85,6 +85,27 @@ export default function Home() {
     playerRef.current?.stop();
   }
 
+  function handleTempoChange(tempo: number) {
+    if (!arrangement) return;
+    setArrangement({ ...arrangement, tempo });
+  }
+
+  function handleToggleTrack(track: "drums" | "bass" | "saxophone") {
+    if (!arrangement) return;
+    const current = arrangement[track];
+    if (!current) return;
+    setArrangement({ ...arrangement, [track]: { ...current, enabled: !current.enabled } });
+  }
+
+  function handleStartOver() {
+    playerRef.current?.stop();
+    setArrangement(null);
+    setAudioUrl(null);
+    setOverrides({});
+    setHistory([]);
+    setError(null);
+  }
+
   return (
     <div className="flex min-h-screen flex-col">
       <Header />
@@ -94,8 +115,8 @@ export default function Home() {
             Play something. JamFlow builds the rest.
           </h1>
           <p className="mt-5 max-w-xl text-lg text-muted">
-            Record a riff, and tell your AI bandmate what to add next — drums,
-            bass, a saxophone response — all in plain language.
+            Record yourself playing anything — guitar, piano, vocals, drums —
+            and tell your AI bandmate what to add next in plain language.
           </p>
           <div className="mt-8">
             <Recorder
@@ -125,6 +146,12 @@ export default function Home() {
                 >
                   Stop
                 </button>
+                <button
+                  onClick={handleStartOver}
+                  className="text-sm font-semibold text-muted underline underline-offset-4 hover:text-foreground"
+                >
+                  Start over
+                </button>
               </div>
               {status === "updating" && (
                 <span className="text-sm text-muted">Updating arrangement…</span>
@@ -132,7 +159,7 @@ export default function Home() {
             </div>
 
             <div className="mt-10">
-              <AnalysisPanel arrangement={arrangement} />
+              <AnalysisPanel arrangement={arrangement} onTempoChange={handleTempoChange} />
             </div>
 
             <div className="mt-10">
@@ -140,6 +167,7 @@ export default function Home() {
                 arrangement={arrangement}
                 overrides={overrides}
                 onChange={setOverrides}
+                onToggleTrack={handleToggleTrack}
               />
             </div>
 
