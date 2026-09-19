@@ -1,4 +1,10 @@
-import type { Arrangement, NoteEvent, TrackOverride, TrackOverrides } from "./types";
+import type {
+  Arrangement,
+  NoteEvent,
+  TrackOverride,
+  TrackOverrides,
+  TrackVolumes,
+} from "./types";
 
 type Tone = typeof import("tone");
 type DrumVoice = import("tone").MembraneSynth | import("tone").NoiseSynth;
@@ -20,13 +26,13 @@ const NOISE_DECAY: Record<string, number> = {
 function createDrumVoice(Tone: Tone, laneName: string, intensity: number): DrumVoice {
   const membranePitch = MEMBRANE_LANES[laneName];
   if (membranePitch) {
-    return new Tone.MembraneSynth({ volume: -10 + intensity * 8 }).toDestination();
+    return new Tone.MembraneSynth({ volume: -10 + intensity * 8 });
   }
   const decay = NOISE_DECAY[laneName] ?? 0.05;
   return new Tone.NoiseSynth({
     volume: -16 + intensity * 10,
     envelope: { attack: 0.001, decay, sustain: 0 },
-  }).toDestination();
+  });
 }
 
 function triggerDrumVoice(voice: DrumVoice, laneName: string, time: number) {
@@ -51,11 +57,23 @@ export class ArrangementPlayer {
   private bassLoop: import("tone").Loop | null = null;
   private saxPart: import("tone").Part | null = null;
   private extraParts: import("tone").Part[] = [];
+  private gains: Map<string, import("tone").Gain> = new Map();
+
+  // Per-track gain node so a track's volume can be adjusted without recreating its voices.
+  private getGain(Tone: Tone, track: string, volumes: TrackVolumes): import("tone").Gain {
+    let gain = this.gains.get(track);
+    if (!gain) {
+      gain = new Tone.Gain(volumes[track] ?? 1).toDestination();
+      this.gains.set(track, gain);
+    }
+    return gain;
+  }
 
   async play(
     arrangement: Arrangement,
     sourceAudioUrl: string | null,
-    overrides: TrackOverrides = {}
+    overrides: TrackOverrides = {},
+    volumes: TrackVolumes = {}
   ) {
     const Tone = await import("tone");
     this.toneModule = Tone;
@@ -66,7 +84,7 @@ export class ArrangementPlayer {
     const secondsPerSongBeat = 60 / arrangement.tempo;
 
     if (sourceAudioUrl) {
-      this.sourcePlayer = new Tone.Player().toDestination();
+      this.sourcePlayer = new Tone.Player().connect(this.getGain(Tone, "source", volumes));
       // Player loads its buffer asynchronously — must await before starting playback.
       await this.sourcePlayer.load(sourceAudioUrl);
     }
@@ -75,10 +93,11 @@ export class ArrangementPlayer {
       const override = overrides.drums;
       const intensity = arrangement.drums.intensity;
       const beatSeconds = 60 / (override?.bpm ?? arrangement.tempo);
+      const drumGain = this.getGain(Tone, "drums", volumes);
       const pattern = override?.pattern;
       const lanes = pattern ? pattern.lanes.map((l) => l.name) : ["kick", "hat"];
       for (const name of lanes) {
-        this.drumVoices.set(name, createDrumVoice(Tone, name, intensity));
+        this.drumVoices.set(name, createDrumVoice(Tone, name, intensity).connect(drumGain));
       }
 
       if (pattern) {
@@ -112,7 +131,7 @@ export class ArrangementPlayer {
       this.bassSynth = new Tone.MonoSynth({
         volume: -8,
         oscillator: { type: "sine" },
-      }).toDestination();
+      }).connect(this.getGain(Tone, "bass", volumes));
       const rootNote = `${rootPitchFromKey(arrangement.key)}2`;
 
       const pattern = override?.pattern;
@@ -141,19 +160,28 @@ export class ArrangementPlayer {
       this.saxSynth = new Tone.Synth({
         oscillator: { type: "sawtooth" },
         volume: -6,
-      }).toDestination();
+      }).connect(this.getGain(Tone, "saxophone", volumes));
       this.saxPart = createNotePart(Tone, this.saxSynth, arrangement.saxophone.notes).start(0);
     }
 
     for (const extra of arrangement.extra_instruments) {
       if (!extra.notes.length) continue;
-      const synth = new Tone.Synth({ oscillator: { type: "triangle" }, volume: -8 }).toDestination();
+      const trackKey = `extra:${extra.name}`;
+      const synth = new Tone.Synth({ oscillator: { type: "triangle" }, volume: -8 }).connect(
+        this.getGain(Tone, trackKey, volumes)
+      );
       this.extraSynths.set(extra.name, synth);
       this.extraParts.push(createNotePart(Tone, synth, extra.notes).start(0));
     }
 
     this.sourcePlayer?.start(0);
     Tone.getTransport().start();
+  }
+
+  // Update a track's volume live, without restarting playback.
+  setVolume(track: string, value: number) {
+    const gain = this.gains.get(track);
+    if (gain) gain.gain.value = value;
   }
 
   stop() {
@@ -166,8 +194,10 @@ export class ArrangementPlayer {
     [this.sourcePlayer, this.bassSynth, this.saxSynth].forEach((node) => node?.dispose());
     this.drumVoices.forEach((voice) => voice.dispose());
     this.extraSynths.forEach((synth) => synth.dispose());
+    this.gains.forEach((gain) => gain.dispose());
     this.drumVoices.clear();
     this.extraSynths.clear();
+    this.gains.clear();
     this.extraParts = [];
     this.sourcePlayer = null;
     this.bassSynth = null;
@@ -177,6 +207,7 @@ export class ArrangementPlayer {
     this.saxPart = null;
   }
 }
+
 
 function createNotePart(
   Tone: Tone,

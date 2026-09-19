@@ -7,6 +7,7 @@ import type {
   PatternTrackName,
   TrackOverride,
   TrackOverrides,
+  TrackVolumes,
 } from "@/lib/types";
 
 interface TimelineProps {
@@ -16,6 +17,8 @@ interface TimelineProps {
   onToggleTrack: (track: PatternTrackName | "saxophone") => void;
   songLengthBars: number;
   onSongLengthChange: (bars: number) => void;
+  volumes: TrackVolumes;
+  onVolumeChange: (track: string, value: number) => void;
 }
 
 const BEATS_PER_BAR = 4;
@@ -49,6 +52,8 @@ export function Timeline({
   onToggleTrack,
   songLengthBars,
   onSongLengthChange,
+  volumes,
+  onVolumeChange,
 }: TimelineProps) {
   const [drag, setDrag] = useState<DragState | null>(null);
   const [editingBeat, setEditingBeat] = useState<PatternTrackName | null>(null);
@@ -124,6 +129,24 @@ export function Timeline({
     onChange({ ...overrides, [track]: { ...override, bpm } });
   }
 
+  function VolumeControl({ trackKey }: { trackKey: string }) {
+    const percent = Math.round((volumes[trackKey] ?? 1) * 100);
+    return (
+      <label className="flex items-center gap-1 text-xs text-muted">
+        Vol
+        <input
+          type="range"
+          min={0}
+          max={150}
+          value={percent}
+          onChange={(e) => onVolumeChange(trackKey, Number(e.target.value) / 100)}
+          className="w-16 accent-accent"
+        />
+        <span className="w-8 text-right font-mono">{percent}%</span>
+      </label>
+    );
+  }
+
   return (
     <div>
       <div className="flex flex-wrap items-baseline justify-between gap-3">
@@ -184,7 +207,9 @@ export function Timeline({
               style={{ width: trackWidth, backgroundColor: `${TRACK_COLORS.source}cc` }}
             />
           </div>
-          <div />
+          <div>
+            <VolumeControl trackKey="source" />
+          </div>
         </div>
 
         {/* Saxophone row: read-only, notes come from Gemini */}
@@ -220,6 +245,9 @@ export function Timeline({
               >
                 Mute
               </button>
+              <div className="mt-1">
+                <VolumeControl trackKey="saxophone" />
+              </div>
             </div>
           </div>
         )}
@@ -249,7 +277,9 @@ export function Timeline({
                 ))}
               </div>
             </div>
-            <div />
+            <div>
+              <VolumeControl trackKey={`extra:${extra.name}`} />
+            </div>
           </div>
         ))}
 
@@ -295,6 +325,7 @@ export function Timeline({
                     </div>
                   </div>
                   <div className="flex items-center gap-3 whitespace-nowrap pl-2">
+                    <VolumeControl trackKey={name} />
                     <label className="flex items-center gap-1 text-xs text-muted">
                       BPM
                       <input

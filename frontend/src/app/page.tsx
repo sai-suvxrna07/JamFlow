@@ -9,7 +9,7 @@ import { CommandBar } from "@/components/CommandBar";
 import { DebugPanel, type DebugEntry } from "@/components/DebugPanel";
 import { analyzeRecording, sendCommand } from "@/lib/api";
 import { ArrangementPlayer } from "@/lib/playbackEngine";
-import type { Arrangement, TrackOverrides } from "@/lib/types";
+import type { Arrangement, TrackOverrides, TrackVolumes } from "@/lib/types";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -18,6 +18,7 @@ export default function Home() {
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [overrides, setOverrides] = useState<TrackOverrides>({});
   const [songLengthBars, setSongLengthBars] = useState(8);
+  const [volumes, setVolumes] = useState<TrackVolumes>({});
   const [status, setStatus] = useState<"idle" | "analyzing" | "updating">(
     "idle"
   );
@@ -80,11 +81,16 @@ export default function Home() {
   async function handlePlay() {
     if (!arrangement) return;
     if (!playerRef.current) playerRef.current = new ArrangementPlayer();
-    await playerRef.current.play(arrangement, audioUrl, overrides);
+    await playerRef.current.play(arrangement, audioUrl, overrides, volumes);
   }
 
   function handleStop() {
     playerRef.current?.stop();
+  }
+
+  function handleVolumeChange(track: string, value: number) {
+    setVolumes((v) => ({ ...v, [track]: value }));
+    playerRef.current?.setVolume(track, value);
   }
 
   function handleTempoChange(tempo: number) {
@@ -107,6 +113,7 @@ export default function Home() {
     setHistory([]);
     setError(null);
     setSongLengthBars(8);
+    setVolumes({});
   }
 
   return (
@@ -173,6 +180,8 @@ export default function Home() {
                 onToggleTrack={handleToggleTrack}
                 songLengthBars={songLengthBars}
                 onSongLengthChange={setSongLengthBars}
+                volumes={volumes}
+                onVolumeChange={handleVolumeChange}
               />
             </div>
 

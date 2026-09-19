@@ -30,6 +30,25 @@ def get_client() -> genai.Client:
     return _client
 
 
+PRODUCTION_GUIDANCE = """You think like an experienced producer and mixing \
+engineer, not just an arranger. Apply these principles whenever you set style, \
+intensity, role, or notes for any instrument:
+- Layering: give each instrument its own rhythmic and melodic space so parts \
+complement rather than compete. Avoid multiple instruments hitting the exact same \
+subdivision at the same intensity — that reads as cluttered, not full.
+- Frequency separation: bass should occupy low register and avoid doubling the \
+kick's rhythm note-for-note; melodic instruments (saxophone, extra_instruments) \
+should sit in a register that doesn't clash with the original recording or each \
+other.
+- Call and response / interlocking rhythm over unison: when multiple instruments \
+play at once, prefer interlocking patterns (one plays where another rests) over \
+everyone playing identical rhythms.
+- Dynamics and space: not every instrument needs to play constantly at the same \
+intensity — use rests, lower intensity, or delayed entrances so the arrangement \
+breathes and builds rather than sounding like a wall of sound from beat one.
+- Restraint: fewer, well-placed notes read as more professional than dense, busy \
+parts. Only add complexity the instruction actually calls for."""
+
 ANALYZE_PROMPT = """You are the ears of an AI bandmate and producer. Listen to this \
 recording of a musician playing an instrument (any instrument or voice — guitar, \
 piano, vocals, violin, drums, etc.) and describe it as structured musical data: \
@@ -39,12 +58,16 @@ sensible starting arrangement: leave drums, bass, and saxophone disabled (the \
 musician will ask for them explicitly), leave `extra_instruments` as an empty list, \
 but set style/role fields to sensible defaults so they're ready to be turned on \
 later. Write a one-sentence, plain-language summary of what you heard in the \
-`notes` field."""
+`notes` field.
+
+{production_guidance}"""
 
 COMMAND_PROMPT_TEMPLATE = """You are the producer half of an AI bandmate. The \
 musician recorded a part, and Gemini already analyzed it into the arrangement state \
 below. The musician just gave you a new instruction in plain language. Update the \
 arrangement to reflect it and return the FULL updated arrangement (not a diff).
+
+{production_guidance}
 
 Rules:
 - For drums and bass, describe them with a short style descriptor and an intensity \
@@ -84,7 +107,7 @@ def analyze_recording(audio_bytes: bytes, mime_type: str) -> Arrangement:
     response = _generate_with_retry(
         model=MODEL,
         contents=[
-            ANALYZE_PROMPT,
+            ANALYZE_PROMPT.format(production_guidance=PRODUCTION_GUIDANCE),
             types.Part.from_bytes(data=audio_bytes, mime_type=mime_type),
         ],
         config=types.GenerateContentConfig(
@@ -107,6 +130,7 @@ def interpret_command(
             "instruction says otherwise."
         )
     prompt = COMMAND_PROMPT_TEMPLATE.format(
+        production_guidance=PRODUCTION_GUIDANCE,
         arrangement_json=arrangement.model_dump_json(indent=2),
         instruction=instruction,
         length_instruction=length_instruction,

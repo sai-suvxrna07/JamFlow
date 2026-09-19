@@ -76,6 +76,10 @@ export interface TrackOverride {
 
 export type TrackOverrides = Partial<Record<PatternTrackName, TrackOverride>>;
 
+// Per-track volume (linear gain, 1 = unity), keyed by track id:
+// "source", "drums", "bass", "saxophone", or "extra:<name>" for extra instruments.
+export type TrackVolumes = Record<string, number>;
+
 export interface CommandResponse {
   arrangement: Arrangement;
 }

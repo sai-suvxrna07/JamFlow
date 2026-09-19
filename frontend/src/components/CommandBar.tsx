@@ -8,10 +8,12 @@ interface CommandBarProps {
 }
 
 const SUGGESTIONS = [
-  "Add drums that match this",
-  "Add a bass line",
-  "Add saxophone that complements my melody",
-  "Make the drums more energetic",
+  "Add drums that sit in the pocket without crowding the melody",
+  "Add a bass line that locks in with the kick drum",
+  "Add saxophone that answers my melody instead of playing over it",
+  "Layer the arrangement so each instrument has its own space",
+  "Add dynamics — build energy into the second half",
+  "Make the mix feel less cluttered and more focused",
 ];
 
 export function CommandBar({ onSubmit, disabled }: CommandBarProps) {
