@@ -42,6 +42,30 @@ export interface CommandRequest {
   arrangement: Arrangement;
 }
 
+// --- Timeline / beat-maker state ---
+// These are UI-only concerns (when a track plays, and any hand-drawn beat
+// pattern) — Gemini never sees or sets them, so they live outside Arrangement.
+
+export type PatternTrackName = "drums" | "bass";
+
+export interface StepLane {
+  name: string; // e.g. "kick", "snare", "hat", "note"
+  steps: boolean[]; // fixed length, one bar's worth of steps
+}
+
+export interface StepPattern {
+  stepsPerBar: number; // e.g. 16
+  lanes: StepLane[];
+}
+
+export interface TrackOverride {
+  start: number; // beats from arrangement start
+  end: number | null; // beats from arrangement start; null = play through
+  pattern?: StepPattern | null;
+}
+
+export type TrackOverrides = Partial<Record<PatternTrackName, TrackOverride>>;
+
 export interface CommandResponse {
   arrangement: Arrangement;
 }

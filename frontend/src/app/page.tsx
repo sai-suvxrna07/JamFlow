@@ -4,18 +4,19 @@ import { useRef, useState } from "react";
 import { Header } from "@/components/Header";
 import { Recorder } from "@/components/Recorder";
 import { AnalysisPanel } from "@/components/AnalysisPanel";
-import { ArrangementTrackList } from "@/components/ArrangementTrackList";
+import { Timeline } from "@/components/Timeline";
 import { CommandBar } from "@/components/CommandBar";
 import { DebugPanel, type DebugEntry } from "@/components/DebugPanel";
 import { analyzeRecording, sendCommand } from "@/lib/api";
 import { ArrangementPlayer } from "@/lib/playbackEngine";
-import type { Arrangement } from "@/lib/types";
+import type { Arrangement, TrackOverrides } from "@/lib/types";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 export default function Home() {
   const [arrangement, setArrangement] = useState<Arrangement | null>(null);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  const [overrides, setOverrides] = useState<TrackOverrides>({});
   const [status, setStatus] = useState<"idle" | "analyzing" | "updating">(
     "idle"
   );
@@ -77,7 +78,7 @@ export default function Home() {
   async function handlePlay() {
     if (!arrangement) return;
     if (!playerRef.current) playerRef.current = new ArrangementPlayer();
-    await playerRef.current.play(arrangement, audioUrl);
+    await playerRef.current.play(arrangement, audioUrl, overrides);
   }
 
   function handleStop() {
@@ -135,7 +136,11 @@ export default function Home() {
             </div>
 
             <div className="mt-10">
-              <ArrangementTrackList arrangement={arrangement} />
+              <Timeline
+                arrangement={arrangement}
+                overrides={overrides}
+                onChange={setOverrides}
+              />
             </div>
 
             <div className="mt-10">
