@@ -1,4 +1,5 @@
 from fastapi import APIRouter, HTTPException, UploadFile
+from google.genai import errors as genai_errors
 
 from app.gemini_client import analyze_recording
 from app.schemas import AnalyzeResponse
@@ -20,6 +21,8 @@ async def analyze(audio: UploadFile) -> AnalyzeResponse:
 
     try:
         arrangement = analyze_recording(audio_bytes, mime_type)
+    except genai_errors.ServerError as exc:
+        raise HTTPException(status_code=503, detail="Gemini is temporarily overloaded, try again") from exc
     except RuntimeError as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 

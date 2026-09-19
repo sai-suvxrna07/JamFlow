@@ -6,6 +6,16 @@ import type {
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
+async function readErrorDetail(res: Response): Promise<string> {
+  try {
+    const body = await res.json();
+    if (typeof body?.detail === "string") return body.detail;
+  } catch {
+    // response wasn't JSON, fall through to a generic message
+  }
+  return `Request failed with status ${res.status}`;
+}
+
 export async function analyzeRecording(
   audio: Blob
 ): Promise<AnalyzeResponse> {
@@ -18,7 +28,7 @@ export async function analyzeRecording(
   });
 
   if (!res.ok) {
-    throw new Error(`Analyze request failed: ${res.status}`);
+    throw new Error(await readErrorDetail(res));
   }
 
   return res.json();
@@ -35,8 +45,9 @@ export async function sendCommand(
   });
 
   if (!res.ok) {
-    throw new Error(`Command request failed: ${res.status}`);
+    throw new Error(await readErrorDetail(res));
   }
+
 
   return res.json();
 }

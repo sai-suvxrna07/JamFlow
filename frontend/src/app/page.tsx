@@ -6,9 +6,12 @@ import { Recorder } from "@/components/Recorder";
 import { AnalysisPanel } from "@/components/AnalysisPanel";
 import { ArrangementTrackList } from "@/components/ArrangementTrackList";
 import { CommandBar } from "@/components/CommandBar";
+import { DebugPanel, type DebugEntry } from "@/components/DebugPanel";
 import { analyzeRecording, sendCommand } from "@/lib/api";
 import { ArrangementPlayer } from "@/lib/playbackEngine";
 import type { Arrangement } from "@/lib/types";
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 export default function Home() {
   const [arrangement, setArrangement] = useState<Arrangement | null>(null);
@@ -18,7 +21,12 @@ export default function Home() {
   );
   const [error, setError] = useState<string | null>(null);
   const [history, setHistory] = useState<string[]>([]);
+  const [debugLog, setDebugLog] = useState<DebugEntry[]>([]);
   const playerRef = useRef<ArrangementPlayer | null>(null);
+
+  function logDebug(entry: Omit<DebugEntry, "time">) {
+    setDebugLog((log) => [...log, { time: new Date().toLocaleTimeString(), ...entry }]);
+  }
 
   async function handleRecordingComplete(blob: Blob) {
     setError(null);
@@ -27,8 +35,15 @@ export default function Home() {
     try {
       const { arrangement: result } = await analyzeRecording(blob);
       setArrangement(result);
-    } catch {
-      setError("Could not analyze the recording. Try again.");
+      logDebug({
+        action: "analyze",
+        status: "success",
+        detail: JSON.stringify(result, null, 2),
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unknown error";
+      setError(message);
+      logDebug({ action: "analyze", status: "error", detail: message });
     } finally {
       setStatus("idle");
     }
@@ -45,8 +60,15 @@ export default function Home() {
         arrangement
       );
       setArrangement(result);
-    } catch {
-      setError("Could not update the arrangement. Try again.");
+      logDebug({
+        action: "command",
+        status: "success",
+        detail: `"${instruction}" →\n${JSON.stringify(result, null, 2)}`,
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unknown error";
+      setError(message);
+      logDebug({ action: "command", status: "error", detail: `"${instruction}" → ${message}` });
     } finally {
       setStatus("idle");
     }
@@ -134,6 +156,8 @@ export default function Home() {
             </div>
           </section>
         )}
+
+        <DebugPanel entries={debugLog} apiUrl={API_URL} />
       </main>
       <footer className="border-t border-line py-8">
         <p className="mx-auto max-w-5xl px-6 text-sm text-muted">

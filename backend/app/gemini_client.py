@@ -1,13 +1,17 @@
 """Thin wrapper around the Gemini API for musical analysis and arrangement edits."""
 
 import os
+import time
 
 from google import genai
+from google.genai import errors as genai_errors
 from google.genai import types
 
 from app.schemas import Arrangement
 
-MODEL = "gemini-2.5-flash"
+MODEL = "gemini-3.6-flash"
+MAX_RETRIES = 3
+RETRY_BACKOFF_SECONDS = 2
 
 _client: genai.Client | None = None
 
@@ -56,9 +60,19 @@ Musician's instruction: "{instruction}"
 """
 
 
-def analyze_recording(audio_bytes: bytes, mime_type: str) -> Arrangement:
+def _generate_with_retry(**kwargs) -> types.GenerateContentResponse:
     client = get_client()
-    response = client.models.generate_content(
+    for attempt in range(MAX_RETRIES):
+        try:
+            return client.models.generate_content(**kwargs)
+        except genai_errors.ServerError:
+            if attempt == MAX_RETRIES - 1:
+                raise
+            time.sleep(RETRY_BACKOFF_SECONDS * (attempt + 1))
+
+
+def analyze_recording(audio_bytes: bytes, mime_type: str) -> Arrangement:
+    response = _generate_with_retry(
         model=MODEL,
         contents=[
             ANALYZE_PROMPT,
@@ -73,12 +87,11 @@ def analyze_recording(audio_bytes: bytes, mime_type: str) -> Arrangement:
 
 
 def interpret_command(instruction: str, arrangement: Arrangement) -> Arrangement:
-    client = get_client()
     prompt = COMMAND_PROMPT_TEMPLATE.format(
         arrangement_json=arrangement.model_dump_json(indent=2),
         instruction=instruction,
     )
-    response = client.models.generate_content(
+    response = _generate_with_retry(
         model=MODEL,
         contents=[prompt],
         config=types.GenerateContentConfig(
