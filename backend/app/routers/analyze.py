@@ -21,6 +21,14 @@ async def analyze(audio: UploadFile) -> AnalyzeResponse:
 
     try:
         arrangement = analyze_recording(audio_bytes, mime_type)
+    except genai_errors.ClientError as exc:
+        if exc.code == 429:
+            raise HTTPException(
+                status_code=429,
+                detail="Gemini's free-tier daily quota is exhausted for this model. "
+                "Wait for the daily reset or enable billing on your Google AI Studio project.",
+            ) from exc
+        raise HTTPException(status_code=502, detail=f"Gemini rejected the request: {exc.message}") from exc
     except genai_errors.ServerError as exc:
         raise HTTPException(status_code=503, detail="Gemini is temporarily overloaded, try again") from exc
     except RuntimeError as exc:
